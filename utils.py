@@ -207,11 +207,8 @@ def form_mixtures(digit1, digit2, loader, arguments):
         
     dataset1 = TensorDataset(data_tensor=inp1,
                                         target_tensor=dataset1,
-                                        lens=[1]*Nmix)
-    dataset2 = data_utils.TensorDataset(data_tensor=inp2,
-                                        target_tensor=dataset2)
-    dataset_mix = data_utils.TensorDataset(data_tensor=dataset_mix,
-                                        target_tensor=torch.ones(Nmix))
+da    dataset2 = data_utils.TensorDataset(inp2)
+    dataset_mix = data_utils.TensorDataset(dataset_mix)
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if arguments.cuda else {}
     loader1 = data_utils.DataLoader(dataset1, batch_size=arguments.batch_size, shuffle=False, **kwargs)

@@ -331,8 +331,6 @@ class netD(nn.Module):
         self.L = kwargs['L']
         self.K = kwargs['K'] 
         self.arguments = kwargs['arguments']
-        if hasattr(self.arguments, 'pack_num'):
-            self.L = self.arguments.pack_num*self.L
 
         self.l1 = nn.Linear(self.L, self.K, bias=True)
         #initializationhelper(self.l1, 'tanh')
@@ -355,12 +353,18 @@ class netD(nn.Module):
         #    split = torch.split(inp, Ncut, dim=0)
         #    inp = torch.cat(split, dim=1)
 
+        print("This is inp: {}".format(inp))
+        print("Size of inp: {}".format(len(inp)))
+
         h1 = F.tanh((self.l1(inp)))
         
         if self.arguments.tr_method == 'adversarial_wasserstein':
             output = (self.l3(h1))
         else:
             output = F.sigmoid(self.l3(h1))
+
+        output = [x[0] for x in output]
+        output = torch.FloatTensor(output)
 
         return output, h1
 
@@ -1225,6 +1229,8 @@ def adversarial_trainer(loader_mix, train_loader,
                 labels = Variable(torch.ones(sz)*true).squeeze().float()
                 if arguments.cuda:
                     labels = labels.cuda()
+                print("This is out d: {} with size {}".format(out_d, out_d.size()))
+                print("This is labels: {} with size {}".format(labels, labels.size()))
                 err_D_real = criterion(out_d, labels)
                 err_D_real.backward()
 

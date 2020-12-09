@@ -135,6 +135,10 @@ else:
     EP = arguments.EP_train
     if tr_method == 'adversarial':
         criterion = nn.BCELoss()
+
+        print("This is K: {}".format(arguments.K))
+        print("This is L2: {}".format(arguments.L2))
+
         adversarial_trainer(loader_mix=loader_mix,
                             train_loader=loader1,
                             generator=generator1, 
