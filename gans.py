@@ -7,7 +7,7 @@ from torch.autograd import Variable
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-class DebugLayer(nn.Module):
+class _DebugLayer(nn.Module):
     def __init__(self, log):
         super(DebugLayer, self).__init__()
         self.log = log
@@ -17,9 +17,9 @@ class DebugLayer(nn.Module):
         print(x.shape)
         return x
     
-class netG(nn.Module):
+class _netG(nn.Module):
     def __init__(self, inputSize, hiddenSize, outputSize):
-        super(netG, self).__init__()
+        super(_netG, self).__init__()
         self.inputSize = inputSize
         self.hiddenSize = hiddenSize
         self.outputSize = outputSize
@@ -35,9 +35,9 @@ class netG(nn.Module):
         return self.mainModule(x.view(-1,self.inputSize))
 
 
-class netD(nn.Module):
+class _netD(nn.Module):
     def __init__(self, inputSize, hiddenSize):
-        super(netD, self).__init__()
+        super(_netD, self).__init__()
         self.inputSize = inputSize
         self.hiddenSize = hiddenSize
 
@@ -51,11 +51,11 @@ class netD(nn.Module):
         return self.mainModule(x.view(-1,self.inputSize))
 
 def Generator(inputSize, hiddenSize, outputSize):
-    return netG(inputSize, hiddenSize, outputSize).to(device)
+    return _netG(inputSize, hiddenSize, outputSize).to(device)
 
 
 def Critic(inputSize, hiddenSize):
-    return netD(inputSize, hiddenSize).to(device)
+    return _netD(inputSize, hiddenSize).to(device)
 
 def adversarial_trainer( 
     train_loader, 

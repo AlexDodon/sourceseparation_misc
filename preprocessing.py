@@ -34,7 +34,14 @@ def splitSim(simNo):
     sim = scipy.io.loadmat('../data/gen/simulation_{}.mat'.format(simNo))
 
     data = sim["data"][0]
+    dataMax = max(data)
+    dataMin = min(data)
+    div = dataMax - dataMin
+
+    data = [(x - dataMin) / div for x in data]
+
     firstSamples = gt["spike_first_sample"][0][simNo - 1][0]
+    spikeClasses = gt["spike_classes"][0][simNo - 1][0]
 
     spikes = []
     hash = []
@@ -51,8 +58,12 @@ def splitSim(simNo):
                 hash.append(data[simIndex : firstSamples[spikeIndex]])
                 simIndex = firstSamples[spikeIndex]
             else: # I have a spike
-                spikes.append(data[simIndex : simIndex + spikeLength])
-                simIndex += spikeLength
+                # TODO consider taking into consideration multi unit spikes
+                if spikeClasses[spikeIndex] != 0: # It isn't a multi unit spike
+                    spikes.append(data[simIndex : simIndex + spikeLength])
+                    simIndex += spikeLength
+                else:
+                    simIndex += spikeLength + 30 # it is a multi unit spike
                 spikeIndex += 1
         else: # No more spikes; might still have hash
             hash.append(data[simIndex:])
@@ -78,6 +89,7 @@ def gen_loaders(L1, batchsize):
                 
     background = np.array(background)
 
+    
     
     gt = scipy.io.loadmat('../data/gen/ground_truth.mat')
     
