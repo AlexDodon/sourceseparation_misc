@@ -169,10 +169,6 @@ def gen_loaders(L1, batchsize):
     testdata = np.array(testdata)
     testlabel = np.array(testlabel)
     
-    n1 = torch.randn(len(spikes), L1) 
-    n2 = torch.randn(len(background), L1) 
-    n1 = data_utils.TensorDataset(n1)
-    n2 = data_utils.TensorDataset(n2)  
     
     spikes = torch.from_numpy(spikes).float()
     background = torch.from_numpy(background).float()
@@ -184,11 +180,9 @@ def gen_loaders(L1, batchsize):
     spike_dataset      = data_utils.TensorDataset(spikes)
     background_dataset = data_utils.TensorDataset(background)
     
-    noise1 = data_utils.DataLoader(n1, batch_size=batchsize, shuffle=False)
-    noise2 = data_utils.DataLoader(n2, batch_size=batchsize, shuffle=False)
     loader1 = data_utils.DataLoader(spike_dataset, batch_size=batchsize, shuffle=False)
     loader2 = data_utils.DataLoader(background_dataset, batch_size=batchsize, shuffle=False)
     loader_mix_test = data_utils.DataLoader(sim_test, shuffle=False)
     loader_mix_val = data_utils.DataLoader(sim_val, shuffle=False)
 
-    return noise1, noise2, loader1, loader2, loader_mix_val, vallabel, loader_mix_test, testlabel
+    return loader1, loader2, loader_mix_val, vallabel, loader_mix_test, testlabel
