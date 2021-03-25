@@ -74,6 +74,10 @@ def splitSim(simNo):
 def gen_loaders(L1, batchsize):
     
     spikes, bg = splitSim(1)
+    # s, b = splitSim(2)
+
+    # spikes = np.concatenate((spikes,s))
+    # bg = np.concatenate((bg,b))
     
     background = []
     
@@ -99,6 +103,18 @@ def gen_loaders(L1, batchsize):
     valsim = scipy.io.loadmat('../data/gen/simulation_12.mat')
     valdata = valsim["data"][0][0:20000]
     valfirstSamples = gt["spike_first_sample"][0][12 - 1][0]
+    
+    valdataMax = max(valdata)
+    valdataMin = min(valdata)
+    valdiv = valdataMax - valdataMin
+
+    valdata = [(x - valdataMin) / valdiv for x in valdata]
+    
+    testdataMax = max(testdata)
+    testdataMin = min(testdata)
+    valdiv = testdataMax - testdataMin
+
+    testdata = [(x - testdataMin) / valdiv for x in testdata]
 
     vd = []
     vl = []
@@ -130,7 +146,7 @@ def gen_loaders(L1, batchsize):
             for j in range(i + 100, i + 100 + 4):
                 valdata.append(vd[j])
                 vallabel.append(0)
-            
+
     valdata = np.array(valdata)
     vallabel = np.array(vallabel)
             
@@ -168,7 +184,6 @@ def gen_loaders(L1, batchsize):
             
     testdata = np.array(testdata)
     testlabel = np.array(testlabel)
-    
     
     spikes = torch.from_numpy(spikes).float()
     background = torch.from_numpy(background).float()

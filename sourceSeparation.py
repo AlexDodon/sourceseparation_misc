@@ -16,11 +16,11 @@ def maxlikelihood_separatesources(
     x1hat, x2hat = [], []
     mixes = []
     for i, [mix] in enumerate(loader_mix): 
-        mix = mix.squeeze().view(-1,79).to(device)
+        mix = mix.squeeze().view(-1,1,79).to(device)
         print('Processing source ',i)
         Nmix = mix.size(0)
-        x1 = Variable(torch.rand(Nmix, inputSize, device=device), requires_grad=True)
-        x2 = Variable(torch.rand(Nmix, inputSize, device=device), requires_grad=True)
+        x1 = Variable(torch.rand(Nmix,1,inputSize, device=device), requires_grad=True)
+        x2 = Variable(torch.rand(Nmix,1,inputSize, device=device), requires_grad=True)
 
         optimizer_sourcesep = optim.Adam([x1, x2], lr=1e-3, betas=(0.5, 0.999))
         for epoch in range(epochs):
@@ -44,11 +44,11 @@ def maxlikelihood_separatesources(
     _, axs = plt.subplots(4,3)
     
     for i in range(0,4):
-        axs[i][0].plot(x1hat[i][0])
+        axs[i][0].plot(x1hat[i][0][0])
         axs[i][0].title.set_text('Estimated Source 1')
-        axs[i][1].plot(x2hat[i][0])
+        axs[i][1].plot(x2hat[i][0][0])
         axs[i][1].title.set_text('Estimated Source 2')
-        axs[i][2].plot(mixes[i][0])
+        axs[i][2].plot(mixes[i][0][0])
         axs[i][2].title.set_text('Mixture')
 
     plt.show()

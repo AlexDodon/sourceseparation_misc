@@ -9,7 +9,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class _DebugLayer(nn.Module):
     def __init__(self, log):
-        super(DebugLayer, self).__init__()
+        super(_DebugLayer, self).__init__()
         self.log = log
     
     def forward(self, x):
@@ -38,20 +38,24 @@ class _netG(nn.Module):
         self.outputSize = outputSize
         
         self.mainModule = nn.Sequential(
-            nn.Linear(self.inputSize, self.hiddenSize, bias=True),
-            nn.Softplus(),
-            _Conv1dAdapter(self.hiddenSize, True),
-            nn.Conv1d(in_channels=1,out_channels=1,kernel_size=5,padding=2, padding_mode="reflect"),
-            _Conv1dAdapter(self.hiddenSize, False),
-            nn.Linear(self.hiddenSize, self.outputSize, bias=True),
-            nn.Softplus(),
-            _Conv1dAdapter(self.outputSize, True),
-            nn.Conv1d(in_channels=1,out_channels=1,kernel_size=5,padding=2, padding_mode="reflect"),
-            _Conv1dAdapter(self.outputSize, False)
+            self._block(self.inputSize, 20),
+            self._block(20, 40),
+            self._block(40, 60),
+            self._block(60, self.outputSize),
         )
         
     def forward(self, x):
-        return self.mainModule(x.view(-1,self.inputSize))
+        return self.mainModule(x)
+
+    def _block(self, inSize, outSize):
+        return nn.Sequential(
+            nn.Linear(inSize, outSize, bias=True),
+            nn.Softplus(),
+            nn.Conv1d(in_channels=1,out_channels=1,kernel_size=9,padding=4),
+            nn.Softplus(),
+            nn.Conv1d(in_channels=1,out_channels=1,kernel_size=9,padding=4),
+            nn.Softplus(),
+        )
 
 
 class _netC(nn.Module):
@@ -67,7 +71,7 @@ class _netC(nn.Module):
         )
         
     def forward(self, x):
-        return self.mainModule(x.view(-1,self.inputSize))
+        return self.mainModule(x)
 
 def Generator(inputSize, hiddenSize, outputSize):
     return _netG(inputSize, hiddenSize, outputSize).to(device)
@@ -116,8 +120,10 @@ def adversarial_trainer(
     printEpochs=10,
     examples=4
 ):
-    optimizerC = optim.Adam(critic.parameters(), lr=learningRate, betas=(0.0, 0.9))
-    optimizerG = optim.Adam(generator.parameters(), lr=learningRate, betas=(0.0, 0.9))
+    #optimizerC = optim.Adam(critic.parameters(), lr=learningRate, betas=(0.0, 0.9))
+    #optimizerG = optim.Adam(generator.parameters(), lr=learningRate, betas=(0.0, 0.9))
+    optimizerC = optim.RMSprop(critic.parameters(), lr=learningRate)
+    optimizerG = optim.RMSprop(generator.parameters(), lr=learningRate)
     
     my_dpi = 96
     
@@ -128,26 +134,29 @@ def adversarial_trainer(
             real = real.squeeze().to(device)
 
             for _ in range(Citers):
-                noise = torch.randn(real.shape[0], noiseDim).to(device)
+                noise = torch.rand(real.shape[0], 1, noiseDim).to(device)
                 fake = generator.forward(noise)
 
                 critic_real = critic.forward(real).reshape(-1)
                 critic_fake = critic.forward(fake).reshape(-1)
 
-                gp = _gradient_penalty(critic, real, fake)
+                # gp = _gradient_penalty(critic, real, fake)
 
                 critic_loss = (
                     torch.mean(critic_fake)     # Tries to minimize critic_fake
                     -torch.mean(critic_real)    # Tries to maximize critic_real
-                    + gpLambda * gp             # Tries to minimize gradient penalty
+                #    + gpLambda * gp             # Tries to minimize gradient penalty
                 )
 
                 critic.zero_grad()
                 critic_loss.backward(retain_graph=True)
                 optimizerC.step()
 
+                for p in critic.parameters():
+                    p.data.clamp_(-0.01,0.01)
+
             for _ in range(Giters):
-                noise = torch.randn(batchSize, noiseDim).to(device)
+                noise = torch.rand(batchSize, 1, noiseDim).to(device)
                 fake = generator.forward(noise)
                 critic_fake = critic.forward(fake).reshape(-1)
                 
@@ -160,8 +169,6 @@ def adversarial_trainer(
             criticLoss.append(critic_loss.cpu().detach().numpy())
 
         if (epoch + 1) % printEpochs == 0:
-            plt.figure(figsize=(600/my_dpi, 300/my_dpi), dpi=my_dpi)
-            plt.xticks([0])
             plt.plot(criticLoss)
             plt.plot(torch.zeros(len(criticLoss)).numpy())
             plt.title("Critic loss")
@@ -173,9 +180,8 @@ def adversarial_trainer(
             
             print("\nGenerated example:")
             
-
             for i in range(examples):
-                plt.plot(fake[2 * i].cpu().detach().numpy())
+                plt.plot(fake[i][0].cpu().detach().numpy())
                 plt.show()
 
 if __name__ =="__main__":
