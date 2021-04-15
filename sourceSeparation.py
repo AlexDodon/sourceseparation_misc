@@ -54,3 +54,80 @@ def maxlikelihood_separatesources(
     plt.show()
     
     return x1hat
+
+# some interpretation of results
+
+import numpy as np
+import torch
+import matplotlib.pyplot as plt
+
+
+extractedSpikesValidation = [ x for [[x]] in cleanextractedSpikesValidation]
+extractedSpikesValidation = np.array(extractedSpikesValidation)
+energy = []
+
+for extractedSpike in extractedSpikesValidation:
+    energy.append(sum(np.power(extractedSpike, 2)))
+
+energy = np.array(energy)
+hist, edges = np.histogram(energy, bins = 30)
+
+plt.plot(np.sort(energy))
+plt.show()
+plt.bar(edges[:-1], hist, width=np.diff(edges), edgecolor="black", align="edge")
+plt.show()
+
+tresholds =  [x / 10 for x in range(125,155,1)]
+
+precisions = []
+recalls = []
+f1s = []
+accs = []
+
+for treshold in tresholds:
+    res = []
+
+    for elem in energy:
+    if elem > treshold:
+        res.append(1)
+    else:
+        res.append(0)
+    
+    truepos = 0
+    falsepos = 0
+    trueneg = 0
+    falseneg = 0
+
+    for i in range(0, len(vallabel)):
+        if (
+            vallabel[i] == 1 or 
+            vallabel[i - 1] == 1 or 
+            vallabel[i - 2] == 1 or 
+            i + 1 < 180 and vallabel[i + 1] == 1 or 
+            i + 2 < 180 and vallabel[i + 2] == 1
+        ):
+            if res[i] == 1:
+                truepos += 1
+            else:
+                falseneg += 1
+        else:
+            if res[i] == 1:
+                falsepos += 1
+            else:
+                trueneg += 1
+
+    precision = truepos / (truepos + falsepos)
+    recall = truepos / (truepos + falseneg)  
+    f1 = 2 * ((precision * recall)/(precision+recall)))
+    acc = (truepos + trueneg) / len(vallabel))
+    
+    precisions.append(precision)
+    recalls.append(recall)
+    f1s.append(f1)
+    accs.append(acc)
+    
+_, axs = plt.subplots(1,2)
+
+axs[0].plot(tresholds)
+axs[1].plot(accs)
+plt.show()

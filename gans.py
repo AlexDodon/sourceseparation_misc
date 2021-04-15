@@ -3,7 +3,9 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 import torch.optim as optim
 import torch 
+import torchgan
 from torch.autograd import Variable
+import math
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -16,6 +18,14 @@ class _DebugLayer(nn.Module):
         print(self.log)
         print(x.shape)
         return x
+
+class _FFTLayer(nn.Module):
+    def __init__(self):
+        super(_FFTLayer,self).__init__()
+
+    def forward(self, x):
+        fft = torch.fft.rfft(x, dim=1)
+        return torch.stack([torch.cat((x.real,x.imag),0) for x in fft])
 
 class _Conv1dAdapter(nn.Module):
     def __init__(self, outputSize, isIn):
@@ -38,10 +48,14 @@ class _netG(nn.Module):
         self.outputSize = outputSize
         
         self.mainModule = nn.Sequential(
-            self._block(self.inputSize, 20),
-            self._block(20, 40),
-            self._block(40, 60),
-            self._block(60, self.outputSize),
+            nn.Linear(self.inputSize, self.hiddenSize, bias=True),
+            nn.Softplus(),
+            nn.Linear(self.hiddenSize, self.outputSize, bias=True),
+            nn.Softplus(),
+            # self._block(self.inputSize, 20),
+            # self._block(20, 40),
+            # self._block(40, 60),
+            # self._block(60, self.outputSize),
         )
         
     def forward(self, x):
@@ -65,7 +79,8 @@ class _netC(nn.Module):
         self.hiddenSize = hiddenSize
 
         self.mainModule = nn.Sequential(
-            nn.Linear(self.inputSize, self.hiddenSize, bias=True),
+            _FFTLayer(),
+            nn.Linear(math.ceil(self.inputSize / 2) * 2, self.hiddenSize, bias=True),
             nn.Tanh(),
             nn.Linear(self.hiddenSize, 1, bias=True),
         )
@@ -112,7 +127,7 @@ def adversarial_trainer(
     device = device,
     epochs=5,
     learningRate=1e-4,
-    Citers=5,
+    Citers=10,
     Giters=1,
     noiseDim = 100,
     batchSize = 64,
@@ -135,12 +150,12 @@ def adversarial_trainer(
 
             for _ in range(Citers):
                 noise = torch.rand(real.shape[0], 1, noiseDim).to(device)
-                fake = generator.forward(noise)
+                fake = generator.forward(noise).reshape(-1,critic.inputSize)
 
                 critic_real = critic.forward(real).reshape(-1)
                 critic_fake = critic.forward(fake).reshape(-1)
 
-                # gp = _gradient_penalty(critic, real, fake)
+                gp = _gradient_penalty(critic, real, fake)
 
                 critic_loss = (
                     torch.mean(critic_fake)     # Tries to minimize critic_fake
@@ -157,7 +172,7 @@ def adversarial_trainer(
 
             for _ in range(Giters):
                 noise = torch.rand(batchSize, 1, noiseDim).to(device)
-                fake = generator.forward(noise)
+                fake = generator.forward(noise).reshape(-1,critic.inputSize)
                 critic_fake = critic.forward(fake).reshape(-1)
                 
                 generator_loss = -torch.mean(critic_fake) # Tries to maximize critic_fake
@@ -165,8 +180,27 @@ def adversarial_trainer(
                 generator.zero_grad()
                 generator_loss.backward()
                 optimizerG.step()
+            
+            Loss = critic_loss.cpu().detach().numpy()
+            criticLoss.append(Loss)
+
+            if Loss < 0.002 and Loss > -0.002:
+                plt.plot(criticLoss)
+                plt.plot(torch.zeros(len(criticLoss)).numpy())
+                plt.title("Critic loss")
+                plt.show()
+
+                print("Critic loss {}".format(critic_loss))
                 
-            criticLoss.append(critic_loss.cpu().detach().numpy())
+                print("\nEpoch {}".format(epoch))
+                
+                print("\nGenerated example:")
+                
+                for i in range(examples):
+                    plt.plot(fake[i].cpu().detach().numpy())
+                    plt.show()
+                
+                return
 
         if (epoch + 1) % printEpochs == 0:
             plt.plot(criticLoss)
@@ -181,7 +215,7 @@ def adversarial_trainer(
             print("\nGenerated example:")
             
             for i in range(examples):
-                plt.plot(fake[i][0].cpu().detach().numpy())
+                plt.plot(fake[i].cpu().detach().numpy())
                 plt.show()
 
 if __name__ =="__main__":
