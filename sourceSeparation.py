@@ -44,9 +44,9 @@ def maxlikelihood_separatesources(
     _, axs = plt.subplots(4,3)
     
     for i in range(0,4):
-        axs[i][0].plot(x1hat[i][0][0])
+        axs[i][0].plot(x1hat[i][0])
         axs[i][0].title.set_text('Estimated Source 1')
-        axs[i][1].plot(x2hat[i][0][0])
+        axs[i][1].plot(x2hat[i][0])
         axs[i][1].title.set_text('Estimated Source 2')
         axs[i][2].plot(mixes[i][0][0])
         axs[i][2].title.set_text('Mixture')
