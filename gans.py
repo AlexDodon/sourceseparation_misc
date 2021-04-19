@@ -50,8 +50,9 @@ class _netG(nn.Module):
         self.mainModule = nn.Sequential(
             nn.Linear(self.inputSize, self.hiddenSize, bias=True),
             nn.Softplus(),
-            nn.Linear(self.hiddenSize, self.outputSize, bias=True),
+            nn.Linear(self.hiddenSize, self.hiddenSize, bias=True),
             nn.Softplus(),
+            nn.Linear(self.hiddenSize, self.outputSize, bias=True),
             # self._block(self.inputSize, 20),
             # self._block(20, 40),
             # self._block(40, 60),
@@ -79,8 +80,7 @@ class _netC(nn.Module):
         self.hiddenSize = hiddenSize
 
         self.mainModule = nn.Sequential(
-            _FFTLayer(),
-            nn.Linear(math.ceil(self.inputSize / 2) * 2, self.hiddenSize, bias=True),
+            nn.Linear(self.inputSize, self.hiddenSize, bias=True),
             nn.Tanh(),
             nn.Linear(self.hiddenSize, 1, bias=True),
         )
@@ -197,7 +197,7 @@ def adversarial_trainer(
                 print("\nGenerated example:")
                 
                 for i in range(examples):
-                    plt.plot(fake[i].cpu().detach().numpy())
+                    plt.plot(torch.fft.irfft(fake[i][0:40] + 1j * fake[i][40:]).cpu().detach().numpy())
                     plt.show()
                 
                 return
@@ -215,7 +215,7 @@ def adversarial_trainer(
             print("\nGenerated example:")
             
             for i in range(examples):
-                plt.plot(fake[i].cpu().detach().numpy())
+                plt.plot(torch.fft.irfft(fake[i][0:40] + 1j * fake[i][40:]).cpu().detach().numpy())
                 plt.show()
 
 if __name__ =="__main__":

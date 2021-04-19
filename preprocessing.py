@@ -4,6 +4,8 @@ import numpy as np
 import torch.utils.data as data_utils
 import torch 
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 def checkSpikeLocations():
     gt = scipy.io.loadmat('../data/gen/ground_truth.mat')
     sim = scipy.io.loadmat('../data/gen/simulation_1.mat')
@@ -38,7 +40,7 @@ def splitSim(simNo):
     dataMin = min(data)
     div = dataMax - dataMin
 
-    data = [(x - dataMin) / div for x in data]
+    #data = [(x - dataMin) / div for x in data]
 
     firstSamples = gt["spike_first_sample"][0][simNo - 1][0]
     spikeClasses = gt["spike_classes"][0][simNo - 1][0]
@@ -93,7 +95,15 @@ def gen_loaders(L1, batchsize):
                 
     background = np.array(background)
 
-    
+    spikes = torch.Tensor(spikes).to(device)
+    spikes = torch.fft.rfft(spikes, dim=1)
+    spikes = torch.stack([torch.cat((x.real,x.imag),0) for x in spikes])
+    spikes = spikes.cpu().numpy()
+
+    background = torch.Tensor(background).to(device)
+    background = torch.fft.rfft(background, dim=1)
+    background = torch.stack([torch.cat((x.real,x.imag),0) for x in background])
+    background = background.cpu().numpy()
     
     gt = scipy.io.loadmat('../data/gen/ground_truth.mat')
     
@@ -108,13 +118,13 @@ def gen_loaders(L1, batchsize):
     valdataMin = min(valdata)
     valdiv = valdataMax - valdataMin
 
-    valdata = [(x - valdataMin) / valdiv for x in valdata]
+    #valdata = [(x - valdataMin) / valdiv for x in valdata]
     
     testdataMax = max(testdata)
     testdataMin = min(testdata)
     valdiv = testdataMax - testdataMin
 
-    testdata = [(x - testdataMin) / valdiv for x in testdata]
+    #testdata = [(x - testdataMin) / valdiv for x in testdata]
 
     vd = []
     vl = []
@@ -147,7 +157,6 @@ def gen_loaders(L1, batchsize):
                 valdata.append(vd[j])
                 vallabel.append(0)
 
-    valdata = np.array(valdata)
     vallabel = np.array(vallabel)
             
     td = []
@@ -182,8 +191,18 @@ def gen_loaders(L1, batchsize):
                 testdata.append(td[j])
                 testlabel.append(0)
             
-    testdata = np.array(testdata)
     testlabel = np.array(testlabel)
+
+
+    valdata = torch.Tensor(valdata).to(device)
+    valdata = torch.fft.rfft(valdata, dim=1)
+    valdata = torch.stack([torch.cat((x.real,x.imag),0) for x in valdata])
+    valdata = valdata.cpu().numpy()
+
+    testdata = torch.Tensor(testdata).to(device)
+    testdata = torch.fft.rfft(testdata, dim=1)
+    testdata = torch.stack([torch.cat((x.real,x.imag),0) for x in testdata])
+    testdata = testdata.cpu().numpy()
     
     spikes = torch.from_numpy(spikes).float()
     background = torch.from_numpy(background).float()
