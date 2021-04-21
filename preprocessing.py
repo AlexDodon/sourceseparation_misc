@@ -5,6 +5,7 @@ import torch.utils.data as data_utils
 import torch 
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+plt.rcParams['figure.figsize'] = [16, 8]
 
 def checkSpikeLocations():
     gt = scipy.io.loadmat('../data/gen/ground_truth.mat')
@@ -209,14 +210,16 @@ def gen_loaders(L1, batchsize):
     valdata = torch.from_numpy(valdata).float()
     testdata = torch.from_numpy(testdata).float()
     
-    sim_val        = data_utils.TensorDataset(valdata)
+    simBatchSize = valdata.shape[0]
+    testBatchSize = testdata.shape[0]
+    sim_val        = data_utils.TensorDataset(valdata) 
     sim_test        = data_utils.TensorDataset(testdata)
     spike_dataset      = data_utils.TensorDataset(spikes)
     background_dataset = data_utils.TensorDataset(background)
     
     loader1 = data_utils.DataLoader(spike_dataset, batch_size=batchsize, shuffle=False)
     loader2 = data_utils.DataLoader(background_dataset, batch_size=batchsize, shuffle=False)
-    loader_mix_test = data_utils.DataLoader(sim_test, shuffle=False)
-    loader_mix_val = data_utils.DataLoader(sim_val, shuffle=False)
+    loader_mix_test = data_utils.DataLoader(sim_test, batch_size=simBatchSize, shuffle=False)
+    loader_mix_val = data_utils.DataLoader(sim_val, batch_size=testBatchSize, shuffle=False)
 
     return loader1, loader2, loader_mix_val, vallabel, loader_mix_test, testlabel

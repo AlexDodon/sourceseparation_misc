@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 import torch.optim as optim
 import torch 
 import torchgan
-from torch.autograd import Variable
 import math
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+plt.rcParams['figure.figsize'] = [16, 8]
 
 class _DebugLayer(nn.Module):
     def __init__(self, log):
@@ -132,15 +132,12 @@ def adversarial_trainer(
     noiseDim = 100,
     batchSize = 64,
     gpLambda = 10, 
-    printEpochs=10,
-    examples=4
+    printEpochs=10
 ):
-    #optimizerC = optim.Adam(critic.parameters(), lr=learningRate, betas=(0.0, 0.9))
-    #optimizerG = optim.Adam(generator.parameters(), lr=learningRate, betas=(0.0, 0.9))
-    optimizerC = optim.RMSprop(critic.parameters(), lr=learningRate)
-    optimizerG = optim.RMSprop(generator.parameters(), lr=learningRate)
-    
-    my_dpi = 96
+    optimizerC = optim.Adam(critic.parameters(), lr=learningRate, betas=(0.0, 0.9))
+    optimizerG = optim.Adam(generator.parameters(), lr=learningRate, betas=(0.0, 0.9))
+    #optimizerC = optim.RMSprop(critic.parameters(), lr=learningRate)
+    #optimizerG = optim.RMSprop(generator.parameters(), lr=learningRate)
     
     criticLoss = []
     
@@ -160,15 +157,15 @@ def adversarial_trainer(
                 critic_loss = (
                     torch.mean(critic_fake)     # Tries to minimize critic_fake
                     -torch.mean(critic_real)    # Tries to maximize critic_real
-                #    + gpLambda * gp             # Tries to minimize gradient penalty
+                    + gpLambda * gp             # Tries to minimize gradient penalty
                 )
 
                 critic.zero_grad()
                 critic_loss.backward(retain_graph=True)
                 optimizerC.step()
 
-                for p in critic.parameters():
-                    p.data.clamp_(-0.01,0.01)
+                # for p in critic.parameters():
+                #     p.data.clamp_(-0.01,0.01)
 
             for _ in range(Giters):
                 noise = torch.rand(batchSize, 1, noiseDim).to(device)
@@ -181,26 +178,8 @@ def adversarial_trainer(
                 generator_loss.backward()
                 optimizerG.step()
             
-            Loss = critic_loss.cpu().detach().numpy()
-            criticLoss.append(Loss)
-
-            if Loss < 0.002 and Loss > -0.002:
-                plt.plot(criticLoss)
-                plt.plot(torch.zeros(len(criticLoss)).numpy())
-                plt.title("Critic loss")
-                plt.show()
-
-                print("Critic loss {}".format(critic_loss))
-                
-                print("\nEpoch {}".format(epoch))
-                
-                print("\nGenerated example:")
-                
-                for i in range(examples):
-                    plt.plot(torch.fft.irfft(fake[i][0:40] + 1j * fake[i][40:]).cpu().detach().numpy())
-                    plt.show()
-                
-                return
+            cLoss = critic_loss.cpu().detach().numpy()
+            criticLoss.append(cLoss)
 
         if (epoch + 1) % printEpochs == 0:
             plt.plot(criticLoss)
@@ -214,7 +193,7 @@ def adversarial_trainer(
             
             print("\nGenerated example:")
             
-            for i in range(examples):
+            for i in [7,29,41,61]:
                 plt.plot(torch.fft.irfft(fake[i][0:40] + 1j * fake[i][40:]).cpu().detach().numpy())
                 plt.show()
 
