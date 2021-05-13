@@ -234,15 +234,14 @@ def interpretSeparation(extractedSpikesValidation, critic, vallabel, method="ene
         criticScores = critic.forward(extractedSpikesValidation.to(device)).cpu().detach().numpy()
         criticScores = [x for [x] in criticScores]
 
-        hist, edges = np.histogram(criticScores, bins = 30)
+        hist, edges = np.histogram(criticScores, bins = 100)
 
         plt.plot(np.sort(criticScores))
         plt.show()
         plt.bar(edges[:-1], hist, width=np.diff(edges), edgecolor="black", align="edge")
         plt.show()
 
-        thresholds =  [x / 10 for x in range(-600,-300,1)]
-
+        thresholds =  [x / 2 for x in range(-200,0,1)]
         precisions = []
         recalls = []
         f1s = []
