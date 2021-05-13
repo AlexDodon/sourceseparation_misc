@@ -40,9 +40,9 @@ class _Conv1dAdapter(nn.Module):
             out = x.view(-1, self.outputSize)
         return out
     
-class _netG(nn.Module):
+class _netG_wgan(nn.Module):
     def __init__(self, inputSize, hiddenSize, outputSize):
-        super(_netG, self).__init__()
+        super(_netG_wgan, self).__init__()
         self.inputSize = inputSize
         self.hiddenSize = hiddenSize
         self.outputSize = outputSize
@@ -53,6 +53,9 @@ class _netG(nn.Module):
             nn.Linear(self.hiddenSize, self.hiddenSize, bias=True),
             nn.Softplus(),
             nn.Linear(self.hiddenSize, self.outputSize, bias=True),
+            _Conv1dAdapter(self.outputSize,True),
+            nn.Conv1d(in_channels=1,out_channels=1,kernel_size=5,padding=2),
+            _Conv1dAdapter(self.outputSize,False),
             # self._block(self.inputSize, 20),
             # self._block(20, 40),
             # self._block(40, 60),
@@ -70,12 +73,13 @@ class _netG(nn.Module):
             nn.Softplus(),
             nn.Conv1d(in_channels=1,out_channels=1,kernel_size=9,padding=4),
             nn.Softplus(),
+            nn.Linear(outSize, outSize, bias=True),
         )
 
 
-class _netC(nn.Module):
+class _netC_wgan(nn.Module):
     def __init__(self, inputSize, hiddenSize):
-        super(_netC, self).__init__()
+        super(_netC_wgan, self).__init__()
         self.inputSize = inputSize
         self.hiddenSize = hiddenSize
 
@@ -88,12 +92,12 @@ class _netC(nn.Module):
     def forward(self, x):
         return self.mainModule(x)
 
-def Generator(inputSize, hiddenSize, outputSize):
-    return _netG(inputSize, hiddenSize, outputSize).to(device)
+def GeneratorWgan(inputSize, hiddenSize, outputSize):
+    return _netG_wgan(inputSize, hiddenSize, outputSize).to(device)
 
 
-def Critic(inputSize, hiddenSize):
-    return _netC(inputSize, hiddenSize).to(device)
+def CriticWgan(inputSize, hiddenSize):
+    return _netC_wgan(inputSize, hiddenSize).to(device)
 
 def _gradient_penalty(critic, real, fake):
     batchSize, L = real.shape
@@ -120,7 +124,7 @@ def _gradient_penalty(critic, real, fake):
     return gradient_penalty
 
 
-def adversarial_trainer( 
+def wgan_adversarial_trainer( 
     train_loader, 
     generator, 
     critic, 
@@ -132,12 +136,15 @@ def adversarial_trainer(
     noiseDim = 100,
     batchSize = 64,
     gpLambda = 10, 
-    printEpochs=10
+    printEpochs=10,
+    useGradientPenalty=True
 ):
-    optimizerC = optim.Adam(critic.parameters(), lr=learningRate, betas=(0.0, 0.9))
-    optimizerG = optim.Adam(generator.parameters(), lr=learningRate, betas=(0.0, 0.9))
-    #optimizerC = optim.RMSprop(critic.parameters(), lr=learningRate)
-    #optimizerG = optim.RMSprop(generator.parameters(), lr=learningRate)
+    # if useGradientPenalty:
+    #     optimizerC = optim.Adam(critic.parameters(), lr=learningRate, betas=(0.0, 0.9))
+    #     optimizerG = optim.Adam(generator.parameters(), lr=learningRate, betas=(0.0, 0.9))
+    # else:
+    optimizerC = optim.RMSprop(critic.parameters(), lr=learningRate)
+    optimizerG = optim.RMSprop(generator.parameters(), lr=learningRate)
     
     criticLoss = []
     
@@ -146,31 +153,38 @@ def adversarial_trainer(
             real = real.squeeze().to(device)
 
             for _ in range(Citers):
-                noise = torch.rand(real.shape[0], 1, noiseDim).to(device)
-                fake = generator.forward(noise).reshape(-1,critic.inputSize)
+                noise = torch.rand(real.shape[0], noiseDim).to(device)
+                fake = generator.forward(noise)
 
-                critic_real = critic.forward(real).reshape(-1)
-                critic_fake = critic.forward(fake).reshape(-1)
+                critic_real = critic.forward(real)
+                critic_fake = critic.forward(fake)
 
-                gp = _gradient_penalty(critic, real, fake)
+                if useGradientPenalty:
+                    gp = _gradient_penalty(critic, real, fake)
 
-                critic_loss = (
-                    torch.mean(critic_fake)     # Tries to minimize critic_fake
-                    -torch.mean(critic_real)    # Tries to maximize critic_real
-                    + gpLambda * gp             # Tries to minimize gradient penalty
-                )
+                    critic_loss = (
+                        torch.mean(critic_fake)     # Tries to minimize critic_fake
+                        -torch.mean(critic_real)    # Tries to maximize critic_real
+                        + gpLambda * gp             # Tries to minimize gradient penalty
+                    )
+                else:
+                    critic_loss = (
+                        torch.mean(critic_fake)     # Tries to minimize critic_fake
+                        -torch.mean(critic_real)    # Tries to maximize critic_real
+                    )
 
                 critic.zero_grad()
                 critic_loss.backward(retain_graph=True)
                 optimizerC.step()
 
-                # for p in critic.parameters():
-                #     p.data.clamp_(-0.01,0.01)
+                if not useGradientPenalty:
+                    for p in critic.parameters():
+                        p.data.clamp_(-0.01,0.01)
 
             for _ in range(Giters):
                 noise = torch.rand(batchSize, 1, noiseDim).to(device)
-                fake = generator.forward(noise).reshape(-1,critic.inputSize)
-                critic_fake = critic.forward(fake).reshape(-1)
+                fake = generator.forward(noise)
+                critic_fake = critic.forward(fake)
                 
                 generator_loss = -torch.mean(critic_fake) # Tries to maximize critic_fake
 
@@ -181,21 +195,20 @@ def adversarial_trainer(
             cLoss = critic_loss.cpu().detach().numpy()
             criticLoss.append(cLoss)
 
-        if (epoch + 1) % printEpochs == 0:
-            plt.plot(criticLoss)
-            plt.plot(torch.zeros(len(criticLoss)).numpy())
-            plt.title("Critic loss")
-            plt.show()
+    plt.plot(criticLoss)
+    plt.plot(torch.zeros(len(criticLoss)).numpy())
+    plt.title("Critic loss")
+    plt.show()
 
-            print("Critic loss {}".format(critic_loss))
-            
-            print("\nEpoch {}".format(epoch))
-            
-            print("\nGenerated example:")
-            
-            for i in [7,29,41,61]:
-                plt.plot(torch.fft.irfft(fake[i][0:40] + 1j * fake[i][40:]).cpu().detach().numpy())
-                plt.show()
+    print("Critic loss {}".format(critic_loss))
+    
+    print("\nEpoch {}".format(epoch))
+    
+    print("\nGenerated example:")
+    
+    for i in [7,29,41,61]:
+        plt.plot(torch.fft.irfft(fake[i][0][0:40] + 1j * fake[i][0][40:]).cpu().detach().numpy())
+        plt.show()
 
 if __name__ =="__main__":
     print("No main module functionality.")

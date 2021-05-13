@@ -32,7 +32,7 @@ def checkSpikeLocations():
 
     plt.show()
 
-def splitSim(simNo):
+def splitSim(simNo, valRatio, testRatio):
     gt = scipy.io.loadmat('../data/gen/ground_truth.mat')
     sim = scipy.io.loadmat('../data/gen/simulation_{}.mat'.format(simNo))
 
@@ -72,29 +72,22 @@ def splitSim(simNo):
             hash.append(data[simIndex:])
             simIndex = sampleNumber
 
-    return (np.array(spikes), np.array(hash, dtype=object))
-
-def gen_loaders(L1, batchsize):
-    
-    spikes, bg = splitSim(1)
-    # s, b = splitSim(2)
-
-    # spikes = np.concatenate((spikes,s))
-    # bg = np.concatenate((bg,b))
-    
     background = []
     
-    for chunk in bg:
+    for chunk in hash:
+        if len(background) == len(spikes):
+            break
+
         i = 0
         sample = []
         while i < len(chunk):
             sample.append(chunk[i])
             i += 1
-            if i % 79 == 0:
+            if i % 79 == 0 and len(background) < len(spikes):
                 background.append(sample)
                 sample = []
                 
-    background = np.array(background)
+    rng = np.random.default_rng()
 
     spikes = torch.Tensor(spikes).to(device)
     spikes = torch.fft.rfft(spikes, dim=1)
@@ -105,121 +98,63 @@ def gen_loaders(L1, batchsize):
     background = torch.fft.rfft(background, dim=1)
     background = torch.stack([torch.cat((x.real,x.imag),0) for x in background])
     background = background.cpu().numpy()
-    
-    gt = scipy.io.loadmat('../data/gen/ground_truth.mat')
-    
-    testsim = scipy.io.loadmat('../data/gen/simulation_11.mat')
-    testdata = testsim["data"][0][0:20000]
-    testfirstSamples = gt["spike_first_sample"][0][11 - 1][0]
-    valsim = scipy.io.loadmat('../data/gen/simulation_12.mat')
-    valdata = valsim["data"][0][0:20000]
-    valfirstSamples = gt["spike_first_sample"][0][12 - 1][0]
-    
-    valdataMax = max(valdata)
-    valdataMin = min(valdata)
-    valdiv = valdataMax - valdataMin
 
-    #valdata = [(x - valdataMin) / valdiv for x in valdata]
-    
-    testdataMax = max(testdata)
-    testdataMin = min(testdata)
-    valdiv = testdataMax - testdataMin
+    rng.shuffle(background)
+    rng.shuffle(spikes)
 
-    #testdata = [(x - testdataMin) / valdiv for x in testdata]
+    trainSpikes = []
+    valSpikes = []
+    testSpikes = []
+    trainBg = []
+    valBg = []
+    testBg = []
 
-    vd = []
-    vl = []
-    spikeIndex = 0
-    for index in range(0, len(valdata) - 79):
-        vd.append(valdata[index:index + 79])
-        if index != valfirstSamples[spikeIndex]:
-            vl.append(0)
+    l = len(spikes)
+    for i in range(l):
+        if i <= l * (1 - valRatio - testRatio):
+            trainSpikes.append(spikes[i])
+            trainBg.append(background[i])
+        elif i <= l * (1 - testRatio):
+            valSpikes.append(spikes[i])
+            valBg.append(background[i])
         else:
-            vl.append(1)
-            spikeIndex += 1
-            
-    valdata = []
-    vallabel = []
-    offset = 2
-    for i,x in enumerate(vl):
-        if x == 1:
-            for j in range(i - offset, i):
-                valdata.append(vd[j])
-                vallabel.append(0)
-                
-            valdata.append(vd[i])
-            vallabel.append(1)
-            
-            for j in range(i + 1, i + offset + 1):
-                valdata.append(vd[j])
-                vallabel.append(0)
-            
-            for j in range(i + 100, i + 100 + 4):
-                valdata.append(vd[j])
-                vallabel.append(0)
+            testSpikes.append(spikes[i])
+            testBg.append(background[i])
 
-    vallabel = np.array(vallabel)
-            
-    td = []
-    tl = []
-    spikeIndex = 0
-    for index in range(0, len(testdata) - 79):
-        td.append(testdata[index:index + 79])
-        if index != testfirstSamples[spikeIndex]:
-            tl.append(0)
-        else:
-            tl.append(1)
-            spikeIndex += 1
-            
-            
-            
-    testdata = []
-    testlabel = []
-    for i,x in enumerate(tl):
-        if x == 1:
-            for j in range(i - offset, i):
-                testdata.append(td[j])
-                testlabel.append(0)
-                
-            testdata.append(td[i])
-            testlabel.append(1)
-            
-            for j in range(i + 1, i + offset + 1):
-                testdata.append(td[j])
-                testlabel.append(0)
-            
-            for j in range(i + 100, i + 100 + 4):
-                testdata.append(td[j])
-                testlabel.append(0)
-            
-    testlabel = np.array(testlabel)
+    return (trainSpikes, valSpikes, testSpikes, trainBg, valBg, testBg)
 
+def gen_loaders(batchsize, includedSimulations, valRatio=0.1, testRatio=0.1):
+    trainSpikes = np.empty_like(np.ones(80).reshape(1,80))
+    valSpikes = np.empty_like(np.ones(80).reshape(1,80))
+    testSpikes = np.empty_like(np.ones(80).reshape(1,80))
+    trainBg = np.empty_like(np.ones(80).reshape(1,80))
+    valBg = np.empty_like(np.ones(80).reshape(1,80))
+    testBg = np.empty_like(np.ones(80).reshape(1,80))
 
-    valdata = torch.Tensor(valdata).to(device)
-    valdata = torch.fft.rfft(valdata, dim=1)
-    valdata = torch.stack([torch.cat((x.real,x.imag),0) for x in valdata])
-    valdata = valdata.cpu().numpy()
+    for i in range(1,includedSimulations + 1):
+        trs, vs,ts, trb, vb, tb = splitSim(i, valRatio, testRatio)
+        trainSpikes = np.concatenate((trainSpikes,trs),axis=0)
+        valSpikes = np.concatenate((valSpikes,vs),axis=0)
+        testSpikes = np.concatenate((testSpikes,ts),axis=0)
+        trainBg = np.concatenate((trainBg,trb),axis=0)
+        valBg = np.concatenate((valBg,vb),axis=0)
+        testBg = np.concatenate((testBg,tb),axis=0)
 
-    testdata = torch.Tensor(testdata).to(device)
-    testdata = torch.fft.rfft(testdata, dim=1)
-    testdata = torch.stack([torch.cat((x.real,x.imag),0) for x in testdata])
-    testdata = testdata.cpu().numpy()
+    valSize = len(valSpikes)
+    testSize = len(testSpikes)
+
+    trainSpikes = data_utils.TensorDataset(torch.from_numpy(trainSpikes[1:]).float())
+    valSpikes = data_utils.TensorDataset(torch.from_numpy(valSpikes[1:]).float())
+    testSpikes = data_utils.TensorDataset(torch.from_numpy(testSpikes[1:]).float())
+    trainBg = data_utils.TensorDataset(torch.from_numpy(trainBg[1:]).float())
+    valBg = data_utils.TensorDataset(torch.from_numpy(valBg[1:]).float())
+    testBg = data_utils.TensorDataset(torch.from_numpy(testBg[1:]).float())
+
+    trainSpikesLoader = data_utils.DataLoader(trainSpikes, batch_size=batchsize, shuffle=False)
+    valSpikesLoader = data_utils.DataLoader(valSpikes, batch_size=valSize, shuffle=False)
+    testSpikesLoader = data_utils.DataLoader(testSpikes, batch_size=testSize, shuffle=False)
+    trainBgLoader = data_utils.DataLoader(trainBg, batch_size=batchsize, shuffle=False)
+    valBgLoader = data_utils.DataLoader(valBg, batch_size=valSize, shuffle=False)
+    testBgLoader = data_utils.DataLoader(testBg, batch_size=testSize, shuffle=False)
     
-    spikes = torch.from_numpy(spikes).float()
-    background = torch.from_numpy(background).float()
-    valdata = torch.from_numpy(valdata).float()
-    testdata = torch.from_numpy(testdata).float()
-    
-    simBatchSize = valdata.shape[0]
-    testBatchSize = testdata.shape[0]
-    sim_val        = data_utils.TensorDataset(valdata) 
-    sim_test        = data_utils.TensorDataset(testdata)
-    spike_dataset      = data_utils.TensorDataset(spikes)
-    background_dataset = data_utils.TensorDataset(background)
-    
-    loader1 = data_utils.DataLoader(spike_dataset, batch_size=batchsize, shuffle=False)
-    loader2 = data_utils.DataLoader(background_dataset, batch_size=batchsize, shuffle=False)
-    loader_mix_test = data_utils.DataLoader(sim_test, batch_size=simBatchSize, shuffle=False)
-    loader_mix_val = data_utils.DataLoader(sim_val, batch_size=testBatchSize, shuffle=False)
-
-    return loader1, loader2, loader_mix_val, vallabel, loader_mix_test, testlabel
+    return (trainSpikesLoader, valSpikesLoader, testSpikesLoader, trainBgLoader, valBgLoader, testBgLoader)
