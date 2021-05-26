@@ -32,7 +32,7 @@ def checkSpikeLocations():
 
     plt.show()
 
-def splitSim(simNo, valRatio, testRatio):
+def splitSim(simNo, valRatio, testRatio, doDrown=False):
     gt = scipy.io.loadmat('../data/gen/ground_truth.mat')
     sim = scipy.io.loadmat('../data/gen/simulation_{}.mat'.format(simNo))
 
@@ -62,20 +62,22 @@ def splitSim(simNo, valRatio, testRatio):
                 simIndex = firstSamples[spikeIndex]
             else: # I have a spike
                 # TODO consider taking into consideration multi unit spikes
-                if spikeClasses[spikeIndex] != 0: # It isn't a multi unit spike
-                    spikes.append(data[simIndex : simIndex + spikeLength])
-                    simIndex += spikeLength
-                else:
-                    simIndex += spikeLength + 30 # it is a multi unit spike
+                # right now were taking them into consideration
+                #if spikeClasses[spikeIndex] != 0: # It isn't a multi unit spike
+                spikes.append(data[simIndex : simIndex + spikeLength])
+                simIndex += spikeLength
+                #else:
+                #    simIndex += spikeLength + 30 # it is a multi unit spike
                 spikeIndex += 1
         else: # No more spikes; might still have hash
             hash.append(data[simIndex:])
             simIndex = sampleNumber
 
     background = []
+    drown = []
     
     for chunk in hash:
-        if len(background) == len(spikes):
+        if len(background) == len(spikes) and len(drown) == len(spikes):
             break
 
         i = 0
@@ -83,10 +85,14 @@ def splitSim(simNo, valRatio, testRatio):
         while i < len(chunk):
             sample.append(chunk[i])
             i += 1
-            if i % 79 == 0 and len(background) < len(spikes):
-                background.append(sample)
+            if i % 79 == 0 and (len(background) < len(spikes) or len(drown) < len(spikes)):
+                if len(background) > len(drown):
+                    drown.append(sample)
+                else:
+                    background.append(sample)
+
                 sample = []
-                
+
     rng = np.random.default_rng()
 
     spikes = torch.Tensor(spikes).to(device)
@@ -99,8 +105,14 @@ def splitSim(simNo, valRatio, testRatio):
     background = torch.stack([torch.cat((x.real,x.imag),0) for x in background])
     background = background.cpu().numpy()
 
+    drown = torch.Tensor(drown).to(device)
+    drown = torch.fft.rfft(drown, dim=1)
+    drown = torch.stack([torch.cat((x.real,x.imag),0) for x in drown])
+    drown = drown.cpu().numpy()
+
     rng.shuffle(background)
     rng.shuffle(spikes)
+    rng.shuffle(drown)
 
     trainSpikes = []
     valSpikes = []
@@ -108,40 +120,63 @@ def splitSim(simNo, valRatio, testRatio):
     trainBg = []
     valBg = []
     testBg = []
+    trainDrown = []
+    valDrown = []
+    testDrown = []
 
     l = len(spikes)
     for i in range(l):
         if i <= l * (1 - valRatio - testRatio):
             trainSpikes.append(spikes[i])
             trainBg.append(background[i])
+            trainDrown.append(drown[i])
         elif i <= l * (1 - testRatio):
             valSpikes.append(spikes[i])
             valBg.append(background[i])
+            valDrown.append(drown[i])
         else:
             testSpikes.append(spikes[i])
             testBg.append(background[i])
+            testDrown.append(drown[i])
 
-    return (trainSpikes, valSpikes, testSpikes, trainBg, valBg, testBg)
+    return (trainSpikes, valSpikes, testSpikes, trainBg, valBg, testBg, trainDrown, valDrown, testDrown)
 
-def gen_loaders(batchsize, includedSimulations, valRatio=0.1, testRatio=0.1):
+def drownSpikes(drownRatio, trainSpikes, valSpikes, testSpikes, trainDrown, valDrown, testDrown):
+    trainRes = [spike * drownRatio + noise for spike,noise in zip(trainSpikes,trainDrown)]
+    valRes = [spike * drownRatio + noise for spike,noise in zip(valSpikes,valDrown)]
+    testRes = [spike * drownRatio + noise for spike,noise in zip(testSpikes,testDrown)]
+
+    return (np.array(trainRes), np.array(valRes), np.array(testRes))
+
+def gen_loaders(batchsize, includedSimulations, valRatio=0.1, testRatio=0.1, doDrown=False, drownRatio=0.5):
     trainSpikes = np.empty_like(np.ones(80).reshape(1,80))
     valSpikes = np.empty_like(np.ones(80).reshape(1,80))
     testSpikes = np.empty_like(np.ones(80).reshape(1,80))
     trainBg = np.empty_like(np.ones(80).reshape(1,80))
     valBg = np.empty_like(np.ones(80).reshape(1,80))
     testBg = np.empty_like(np.ones(80).reshape(1,80))
+    trainDrown = np.empty_like(np.ones(80).reshape(1,80))
+    valDrown = np.empty_like(np.ones(80).reshape(1,80))
+    testDrown = np.empty_like(np.ones(80).reshape(1,80))
 
     for i in range(1,includedSimulations + 1):
-        trs, vs,ts, trb, vb, tb = splitSim(i, valRatio, testRatio)
+        print(f"Simularea {i}")
+        trs, vs,ts, trb, vb, tb, trd, vd, td = splitSim(i, valRatio, testRatio, doDrown)
         trainSpikes = np.concatenate((trainSpikes,trs),axis=0)
         valSpikes = np.concatenate((valSpikes,vs),axis=0)
         testSpikes = np.concatenate((testSpikes,ts),axis=0)
         trainBg = np.concatenate((trainBg,trb),axis=0)
         valBg = np.concatenate((valBg,vb),axis=0)
         testBg = np.concatenate((testBg,tb),axis=0)
+        trainDrown = np.concatenate((trainDrown,trd),axis=0)
+        valDrown = np.concatenate((valDrown,vd),axis=0)
+        testDrown = np.concatenate((testDrown,td),axis=0)
 
     valSize = len(valSpikes)
     testSize = len(testSpikes)
+
+    if doDrown:
+        trainSpikes, valSpikes, testSpikes = drownSpikes(drownRatio, trainSpikes, valSpikes, testSpikes, trainDrown, valDrown, testDrown)
 
     trainSpikes = data_utils.TensorDataset(torch.from_numpy(trainSpikes[1:]).float())
     valSpikes = data_utils.TensorDataset(torch.from_numpy(valSpikes[1:]).float())

@@ -72,7 +72,7 @@ def maxlikelihood_separatesources(
     mixes = torch.fft.irfft(mixes).cpu().detach().numpy()
 
     fig, axs = plt.subplots(4,3)
-    plt.setp(axs, ylim=(-0.6,1.7))
+    plt.setp(axs, ylim=(-0.4,1))
     fig.tight_layout()
     
     axs[0][0].title.set_text('Estimated Source 1')
