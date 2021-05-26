@@ -210,5 +210,218 @@ def wgan_adversarial_trainer(
         plt.plot(torch.fft.irfft(fake[i][0][0:40] + 1j * fake[i][0][40:]).cpu().detach().numpy())
         plt.show()
 
+
+class binaryClassification(nn.Module):
+    def __init__(self):
+        super(binaryClassification, self).__init__()
+        # Number of input features is 12.
+        self.layer_1 = nn.Linear(3, 64) 
+        self.layer_2 = nn.Linear(64, 64)
+        self.layer_out = nn.Linear(64, 1) 
+        
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(p=0.1)
+        self.batchnorm1 = nn.BatchNorm1d(64)
+        self.batchnorm2 = nn.BatchNorm1d(64)
+        
+    def forward(self, inputs):
+        x = self.relu(self.layer_1(inputs))
+        x = self.batchnorm1(x)
+        x = self.relu(self.layer_2(x))
+        x = self.batchnorm2(x)
+        x = self.dropout(x)
+        x = self.layer_out(x)
+        
+        return x
+
+
+def binary_acc(y_pred, y_test):
+    y_pred_tag = torch.round(torch.sigmoid(y_pred))
+    #print(y_pred_tag)
+    correct_results_sum = (y_pred_tag == y_test).sum().float()
+    acc = correct_results_sum/y_test.shape[0]
+    #print(acc)
+    acc = torch.round(acc * 100)
+    
+    return acc
+
+def classifiyTrain(
+    train_loader,
+    labels,
+    epoch,
+    model,
+    device
+):
+
+
+    criterion = nn.BCEWithLogitsLoss()
+    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    model.train()
+    for e in range(1,epoch+1):
+        epoch_loss=0
+        epoch_acc=0
+        i=0
+        for X_batch,y_batch in train_loader:
+            X_batch=X_batch.to(device)
+            y_batch=y_batch.to(device)
+
+            optimizer.zero_grad()
+
+            y_pred=model(X_batch)
+            
+
+            loss = criterion(y_pred, y_batch.unsqueeze(1))
+            acc = binary_acc(y_pred, y_batch.unsqueeze(1))
+        
+            loss.backward()
+            optimizer.step()
+        
+            epoch_loss += loss.item()
+            epoch_acc += acc.item()
+            i+=1
+
+        print(f'Epoch {e+0:03}: | Loss: {epoch_loss/len(train_loader):.5f} | Acc: {epoch_acc/len(train_loader):.3f}')
+
+
+
+class trainData():
+    def __init__(self, X_data, y_data):
+        super(trainData, self).__init__()
+        self.X_data = X_data
+        self.y_data = y_data
+        
+    def __getitem__(self, index):
+        return self.X_data[index], self.y_data[index]
+        
+    def __len__ (self):
+        return len(self.X_data)
+
+
+
+class testData():
+    
+    def __init__(self, X_data):
+        super(testData, self).__init__()
+        self.X_data = X_data
+        
+    def __getitem__(self, index):
+        return self.X_data[index]
+        
+    def __len__ (self):
+        return len(self.X_data)
+    
+
+
+
+def getFeatures(extractedSpikeClean,extractedNoiseClean):
+    import numpy as np
+    import torch
+    import matplotlib.pyplot as plt
+    import torch.utils.data as data_utils
+
+    extractedSpikesValidation = np.array(extractedSpikeClean)
+    energySpike = []
+
+    labels=[1,1,1,1,1,0,0,0,0]*20
+
+    extractedNoisesValidation=np.array(extractedNoiseClean)
+    energyNoise=[]
+
+    featureData=[]
+    featureVec=[]
+    for index in range(len(extractedNoisesValidation)):
+        maxS=max(extractedSpikesValidation[index])
+        maxN=max(extractedNoisesValidation[index])
+        featureVec.append(maxS/maxN)
+        
+        minS=min(extractedSpikesValidation[index])
+        minN=min(extractedNoisesValidation[index])
+    
+        featureVec.append(minS/minN)
+    
+        energySpike=sum(np.power(extractedSpikesValidation[index], 2))
+        energyNoise=sum(np.power(extractedNoisesValidation[index], 2))
+    
+        featureVec.append(energySpike/energyNoise)
+        featureData.append(featureVec[index:index+3])
+    
+    featureData=np.array(featureData)
+
+    featureData=trainData(torch.FloatTensor(featureData),torch.FloatTensor(labels))
+
+
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+    print(featureData)
+
+    featureDataLoader=data_utils.DataLoader(featureData,batch_size=18,shuffle=False)
+
+    for data in featureDataLoader:
+    
+        print(data)
+
+
+
+    print(labels)
+    return featureDataLoader
+
+
+def getFeaturesTest(extractedSpikeClean,extractedNoiseClean):
+    import numpy as np
+    import torch
+    import matplotlib.pyplot as plt
+    import torch.utils.data as data_utils
+
+    extractedSpikesValidation = np.array(extractedSpikeClean)
+    energySpike = []
+
+    labels=[1,1,1,1,1,0,0,0,0]*20
+
+    extractedNoisesValidation=np.array(extractedNoiseClean)
+    energyNoise=[]
+
+    featureData=[]
+    featureVec=[]
+    for index in range(len(extractedNoisesValidation)):
+        maxS=max(extractedSpikesValidation[index])
+        maxN=max(extractedNoisesValidation[index])
+        featureVec.append(maxS/maxN)
+        
+        minS=min(extractedSpikesValidation[index])
+        minN=min(extractedNoisesValidation[index])
+    
+        featureVec.append(minS/minN)
+    
+        energySpike=sum(np.power(extractedSpikesValidation[index], 2))
+        energyNoise=sum(np.power(extractedNoisesValidation[index], 2))
+    
+        featureVec.append(energySpike/energyNoise)
+        featureData.append(featureVec[index:index+3])
+    
+    featureData=np.array(featureData)
+
+    featureData=testData(torch.FloatTensor(featureData))
+
+
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+    print(featureData)
+
+    featureDataLoader=data_utils.DataLoader(featureData,batch_size=1)
+
+    for data in featureDataLoader:
+    
+        print(data[0])
+
+
+
+    print(labels)
+    return featureDataLoader
+
+
 if __name__ =="__main__":
     print("No main module functionality.")
