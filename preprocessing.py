@@ -146,6 +146,27 @@ def drownSpikes(drownRatio, trainSpikes, valSpikes, testSpikes, trainDrown, valD
     valRes = [spike * drownRatio + noise for spike,noise in zip(valSpikes,valDrown)]
     testRes = [spike * drownRatio + noise for spike,noise in zip(testSpikes,testDrown)]
 
+    plt.rcParams['figure.figsize'] = [16, 16]
+    fig, axs = plt.subplots(8,4)
+    plt.setp(axs, ylim=(-0.4,1.5))
+    fig.tight_layout()
+    
+    axs[0][0].title.set_text('Input Spike')
+    axs[0][1].title.set_text('Drowned Spike')
+    axs[0][2].title.set_text('Input Spike')
+    axs[0][3].title.set_text('Drowned Spike')
+
+    for i in range(0,8):
+        axs[i][0].plot(torch.fft.irfft(torch.from_numpy(trainSpikes[2 * i])[0:40] + 1j * torch.from_numpy(trainSpikes[2 * i])[40:]).cpu().detach().numpy())
+        axs[i][1].plot(torch.fft.irfft(torch.from_numpy(trainRes[2 * i])[0:40] + 1j * torch.from_numpy(trainRes[2 * i])[40:]).cpu().detach().numpy())
+        axs[i][2].plot(torch.fft.irfft(torch.from_numpy(trainSpikes[2 * i + 1])[0:40] + 1j * torch.from_numpy(trainSpikes[2 * i + 1])[40:]).cpu().detach().numpy())
+        axs[i][3].plot(torch.fft.irfft(torch.from_numpy(trainRes[2 * i + 1])[0:40] + 1j * torch.from_numpy(trainRes[2 * i + 1])[40:]).cpu().detach().numpy())
+
+    plt.show()
+
+
+    plt.rcParams['figure.figsize'] = [16, 8]
+
     return (np.array(trainRes), np.array(valRes), np.array(testRes))
 
 def gen_loaders(batchsize, includedSimulations, valRatio=0.1, testRatio=0.1, doDrown=False, drownRatio=0.5):
