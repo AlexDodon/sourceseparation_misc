@@ -361,3 +361,5 @@ def interpretSeparation(extractedSpikesValidation, critic, vallabel, method="ene
         print("Recall: {}".format(recall))
         print("F1: {}".format(f1))
         print("Accuracy: {}".format(acc))
+
+    return (threshold, precision, recall, f1, acc)
