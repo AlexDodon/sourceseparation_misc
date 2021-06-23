@@ -33,7 +33,7 @@ def checkSpikeLocations():
 
     plt.show()
 
-def splitSim(simNo, valRatio, testRatio, inclusionThreshold=0.4):
+def splitSim(simNo, trainRatio, valRatio, inclusionThreshold=0.4):
     gt = scipy.io.loadmat('../data/gen/ground_truth.mat')
     sim = scipy.io.loadmat('../data/gen/simulation_{}.mat'.format(simNo))
 
@@ -98,107 +98,94 @@ def splitSim(simNo, valRatio, testRatio, inclusionThreshold=0.4):
 
     spikes = torch.Tensor(spikes).to(device)
     spikes = torch.fft.rfft(spikes, dim=1)
-    spikes = torch.stack([torch.cat((x.real,x.imag),0) for x in spikes])
+    spikes = torch.cat((torch.real(spikes), torch.imag(spikes)), axis=1)
     spikes = spikes.cpu().numpy()
 
     background = torch.Tensor(background).to(device)
     background = torch.fft.rfft(background, dim=1)
-    background = torch.stack([torch.cat((x.real,x.imag),0) for x in background])
+    background = torch.cat((torch.real(background), torch.imag(background)), axis=1)
     background = background.cpu().numpy()
 
     drown = torch.Tensor(drown).to(device)
     drown = torch.fft.rfft(drown, dim=1)
-    drown = torch.stack([torch.cat((x.real,x.imag),0) for x in drown])
+    drown = torch.cat((torch.real(drown), torch.imag(drown)), axis=1)
     drown = drown.cpu().numpy()
 
     rng.shuffle(background)
     rng.shuffle(spikes)
     rng.shuffle(drown)
 
-    trainSpikes = []
-    valSpikes = []
-    testSpikes = []
-    trainBg = []
-    valBg = []
-    testBg = []
-    trainDrown = []
-    valDrown = []
-    testDrown = []
-
-    l = len(spikes)
-    for i in range(l):
-        if i <= l * (1 - valRatio - testRatio):
-            trainSpikes.append(spikes[i])
-            trainBg.append(background[i])
-            trainDrown.append(drown[i])
-        elif i <= l * (1 - testRatio):
-            valSpikes.append(spikes[i])
-            valBg.append(background[i])
-            valDrown.append(drown[i])
-        else:
-            testSpikes.append(spikes[i])
-            testBg.append(background[i])
-            testDrown.append(drown[i])
+    trainSpikes, valSpikes, testSpikes = np.split(spikes, [int(len(spikes) * trainRatio), int(len(spikes) * (trainRatio + valRatio))])
+    trainBg, valBg, testBg = np.split(background, [int(len(background) * trainRatio), int(len(background) * (trainRatio + valRatio))])
+    trainDrown, valDrown, testDrown = np.split(drown, [int(len(drown) * trainRatio), int(len(drown) * (trainRatio + valRatio))])
 
     return (trainSpikes, valSpikes, testSpikes, trainBg, valBg, testBg, trainDrown, valDrown, testDrown)
 
-def drownSpikes(snr, trainSpikes, valSpikes, testSpikes, trainDrown, valDrown, testDrown):
+def drownSpikes(snr, trainSpikes, valSpikes, testSpikes, trainDrown, valDrown, testDrown, doPrint):
     scale = []
     trainRes = []
     valRes = []
     testRes = []
     valPrint = []
+    if len(trainSpikes) != 0:
+        for s,n in zip(trainSpikes, trainDrown):
+            try:
+                sc = np.sqrt(snr * np.sum(np.square(n)) / np.sum(np.square(s)))
+            except:
+                continue
+            if np.isnan(sc):
+                continue
+            scale.append(sc)
+            trainRes.append(sc * s + n)
 
-    for i,(s,n) in enumerate(zip(trainSpikes, trainDrown)):
-        try:
-            sc = math.sqrt(snr * (sum([a**2 for a in n]) / sum(a**2 for a in s)))
-        except:
-            continue
-        scale.append(sc)
-        trainRes.append(sc * s + n)
+    if len(valSpikes) != 0:
+        for s,n in zip(valSpikes, valDrown):
+            try:
+                sc = np.sqrt(snr * np.sum(np.square(n)) / np.sum(np.square(s)))
+            except:
+                continue
+            if np.isnan(sc):
+                continue
+            scale.append(sc)
+            valRes.append(sc * s + n)
+            valPrint.append(s)
 
-    for i,(s,n) in enumerate(zip(valSpikes, valDrown)):
-        try:
-            sc = math.sqrt(snr * (sum([a**2 for a in n]) / sum(a**2 for a in s)))
-        except:
-            continue
-        scale.append(sc)
-        valRes.append(sc * s + n)
-        valPrint.append(s)
+    if len(testSpikes) != 0:
+        for s,n in zip(testSpikes, testDrown):
+            try:
+                sc = np.sqrt(snr * np.sum(np.square(n)) / np.sum(np.square(s)))
+            except:
+                continue
+            if np.isnan(sc):
+                continue
+            scale.append(sc)
+            testRes.append(sc * s + n)
 
-    for i,(s,n) in enumerate(zip(testSpikes, testDrown)):
-        try:
-            sc = math.sqrt(snr * (sum([a**2 for a in n]) / sum(a**2 for a in s)))
-        except:
-            continue
-        scale.append(sc)
-        testRes.append(sc * s + n)
+    if doPrint:
 
-    plt.rcParams['figure.figsize'] = [16, 16]
+        plt.rcParams['figure.figsize'] = [16, 16]
 
-    print(f"For snr {snr}")
-    print(len(scale))
+        print(f"For snr {snr}")
+        print(len(scale))
 
-    hist, edges = np.histogram(np.array(scale), bins = 100)
-    plt.bar(edges[:-1], hist, width=np.diff(edges), edgecolor="black", align="edge")
-    #plt.plot(np.sort(scale))
-    plt.show()
+        hist, edges = np.histogram(np.array(scale), bins = 100)
+        plt.bar(edges[:-1], hist, width=np.diff(edges), edgecolor="black", align="edge")
+        plt.show()
 
-    fig, axs = plt.subplots(8,4)
-    plt.setp(axs, ylim=(-0.4,1.5))
-    fig.tight_layout()
-
-    for i,(a,b) in enumerate(zip(valPrint[:32], valRes[:32])):  
-        axs[i//4][i%4].plot(torch.fft.irfft(torch.from_numpy(a)[0:40] + 1j * torch.from_numpy(a)[40:]).cpu().detach().numpy())
-        axs[i//4][i%4].plot(torch.fft.irfft(torch.from_numpy(b)[0:40] + 1j * torch.from_numpy(b)[40:]).cpu().detach().numpy())
-    plt.show()
+        fig, axs = plt.subplots(8,4)
+        plt.setp(axs, ylim=(-0.4,1.5))
+        fig.tight_layout()
+        for i,(a,b) in enumerate(zip(valPrint[:32], valRes[:32])):  
+            axs[i//4][i%4].plot(torch.fft.irfft(torch.from_numpy(a)[0:40] + 1j * torch.from_numpy(a)[40:]).cpu().detach().numpy())
+            axs[i//4][i%4].plot(torch.fft.irfft(torch.from_numpy(b)[0:40] + 1j * torch.from_numpy(b)[40:]).cpu().detach().numpy())
+        plt.show()
 
 
-    plt.rcParams['figure.figsize'] = [16, 8]
+        plt.rcParams['figure.figsize'] = [16, 8]
 
     return (np.array(trainRes), np.array(valRes), np.array(testRes))
 
-def gen_loaders(batchsize, includedSimulations, valRatio=0.1, testRatio=0.1, doDrown=False, snr=10, inclusionThreshold=0.4):
+def gen_loaders(batchsize, includedSimulations, trainRatio=0.8, valRatio=0.1, doDrown=False, snr=10, inclusionThreshold=0.4, doPrint=False):
     trainSpikes = np.empty_like(np.ones(80).reshape(1,80))
     valSpikes = np.empty_like(np.ones(80).reshape(1,80))
     testSpikes = np.empty_like(np.ones(80).reshape(1,80))
@@ -210,8 +197,8 @@ def gen_loaders(batchsize, includedSimulations, valRatio=0.1, testRatio=0.1, doD
     testDrown = np.empty_like(np.ones(80).reshape(1,80))
 
     for i in range(1,includedSimulations + 1):
-        print(f"Simularea {i}")
-        trs, vs,ts, trb, vb, tb, trd, vd, td = splitSim(i, valRatio, testRatio, inclusionThreshold)
+        print(f"{i},", end=" ")
+        trs, vs,ts, trb, vb, tb, trd, vd, td = splitSim(i, trainRatio, valRatio, inclusionThreshold)
         trainSpikes = np.concatenate((trainSpikes,trs),axis=0)
         valSpikes = np.concatenate((valSpikes,vs),axis=0)
         testSpikes = np.concatenate((testSpikes,ts),axis=0)
@@ -221,12 +208,14 @@ def gen_loaders(batchsize, includedSimulations, valRatio=0.1, testRatio=0.1, doD
         trainDrown = np.concatenate((trainDrown,trd),axis=0)
         valDrown = np.concatenate((valDrown,vd),axis=0)
         testDrown = np.concatenate((testDrown,td),axis=0)
+    
+    print()
 
     valSize = len(valSpikes)
     testSize = len(testSpikes)
 
     if doDrown:
-        trainSpikes, valSpikes, testSpikes = drownSpikes(snr, trainSpikes, valSpikes, testSpikes, trainDrown, valDrown, testDrown)
+        trainSpikes, valSpikes, testSpikes = drownSpikes(snr, trainSpikes[1:], valSpikes[1:], testSpikes[1:], trainDrown[1:], valDrown[1:], testDrown[1:], doPrint)
 
     trainSpikes = data_utils.TensorDataset(torch.from_numpy(trainSpikes[1:]).float())
     valSpikes = data_utils.TensorDataset(torch.from_numpy(valSpikes[1:]).float())
