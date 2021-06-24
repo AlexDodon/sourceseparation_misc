@@ -11,7 +11,8 @@ plt.rcParams['figure.figsize'] = [16, 8]
 def maxlikelihood_separatesources(
     generators,
     loader_mix, 
-    epochs=5
+    epochs=5,
+    doPrint=False
 ):
     generator1, generator2 = generators
     inputSize = generator1.inputSize
@@ -63,28 +64,29 @@ def maxlikelihood_separatesources(
     extractedNoises = torch.stack(extractedNoises)
     extractedNoises = torch.fft.irfft(extractedNoises).cpu().detach()
 
-    generatedMixes = [extractedNoise[0:40] + 1j * extractedNoise[40:] for extractedNoise in generatedMixes]
-    generatedMixes = torch.stack(generatedMixes)
-    generatedMixes = torch.fft.irfft(generatedMixes).cpu().detach()
+    if doPrint:
+        generatedMixes = [extractedNoise[0:40] + 1j * extractedNoise[40:] for extractedNoise in generatedMixes]
+        generatedMixes = torch.stack(generatedMixes)
+        generatedMixes = torch.fft.irfft(generatedMixes).cpu().detach()
 
-    mixes = [extractedNoise[0:40] + 1j * extractedNoise[40:] for extractedNoise in mixes]
-    mixes = torch.stack(mixes)
-    mixes = torch.fft.irfft(mixes).cpu().detach()
+        mixes = [extractedNoise[0:40] + 1j * extractedNoise[40:] for extractedNoise in mixes]
+        mixes = torch.stack(mixes)
+        mixes = torch.fft.irfft(mixes).cpu().detach()
+        
+        fig, axs = plt.subplots(4,3)
+        plt.setp(axs, ylim=(-0.4,1))
+        fig.tight_layout()
+        
+        axs[0][0].title.set_text('Estimated Source 1')
+        axs[0][1].title.set_text('Estimated Source 2')
+        axs[0][2].title.set_text('Mixture (Blue) vs Sum of estimated sources')
 
-    fig, axs = plt.subplots(4,3)
-    plt.setp(axs, ylim=(-0.4,1))
-    fig.tight_layout()
-    
-    axs[0][0].title.set_text('Estimated Source 1')
-    axs[0][1].title.set_text('Estimated Source 2')
-    axs[0][2].title.set_text('Mixture (Blue) vs Sum of estimated sources')
+        for i,j in enumerate([0,7,2,23]):
+            axs[i][0].plot(extractedSpikes[j])
+            axs[i][1].plot(extractedNoises[j])
+            axs[i][2].plot(mixes[j])
+            axs[i][2].plot(generatedMixes[j])
 
-    for i,j in enumerate([0,7,2,23]):
-        axs[i][0].plot(extractedSpikes[j])
-        axs[i][1].plot(extractedNoises[j])
-        axs[i][2].plot(mixes[j])
-        axs[i][2].plot(generatedMixes[j])
-
-    plt.show()
+        plt.show()
     
     return (extractedSpikes, extractedNoises)

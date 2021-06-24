@@ -3,8 +3,9 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 import torch.optim as optim
 import torch 
-import torchgan
-import math
+from multiprocessing import Process
+import multiprocessing as mp
+import pickle
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 plt.rcParams['figure.figsize'] = [16, 8]
@@ -206,6 +207,41 @@ def wgan_adversarial_trainer(
     for i in [7,29,41,61]:
         plt.plot(torch.fft.irfft(fake[i][0][0:40] + 1j * fake[i][0][40:]).cpu().detach().numpy())
         plt.show()
+
+def trainingProcess(baseDatasetPath, iteration, baseModelPath, batchSize, noiseDim, epochs, genType):
+    if genType == "spike":
+        trainLoader = pickle.load(open(f"{baseDatasetPath}/it-{iteration}-non-drowned-trainSpikesLoader.pickle", "rb"))
+
+    if genType == "noise":
+        trainLoader = pickle.load(open(f"{baseDatasetPath}/it-{iteration}-non-drowned-trainBgLoader.pickle", "rb"))
+
+    gen = GeneratorWgan(inputSize=noiseDim, hiddenSize=80, outputSize=80)
+    critic = CriticWgan(inputSize=80, hiddenSize=40)
+
+    wgan_adversarial_trainer( 
+        train_loader = trainLoader,
+        generator = gen, 
+        critic = critic, 
+        batchSize = batchSize,
+        noiseDim = noiseDim,
+        epochs = epochs,
+    )
+
+    torch.save(gen.state_dict(), f"{baseModelPath}/it-{iteration}-gen-{genType}.pth")
+    torch.save(critic.state_dict(), f"{baseModelPath}/it-{iteration}-critic-{genType}.pth")
+
+
+def spawnTrainingProcesses(baseDatasetPath, iteration, baseModelPath, batchSize, noiseDim, epochs):
+    mp.set_start_method('spawn')
+    
+    p1 = Process(target=trainingProcess, args=(baseDatasetPath, iteration, baseModelPath, batchSize, noiseDim, epochs, "spike"))
+    p2 = Process(target=trainingProcess, args=(baseDatasetPath, iteration, baseModelPath, batchSize, noiseDim, epochs, "noise"))
+
+    p1.start()
+    p2.start()
+
+    p1.join()
+    p2.join()
 
 if __name__ =="__main__":
     print("No main module functionality.")

@@ -9,6 +9,8 @@ def confusionMatrix(labels, predictions):
         raise Exception("We use only 2 classes: 1 and 0")
 
     if len(labels) != len(predictions):
+        print(len(labels))
+        print(len(predictions))
         raise Exception("the lengths are not equal")
         
     confusionMatrix = np.zeros((2, 2)).astype("int64")
@@ -28,9 +30,9 @@ def metrics(confusionMatrix):
 
     return (accuracy, sensitivity, specificity, f1)
 
-def interpretSeparation(extractedSpikes, critic, vallabel, method="energy", test=False, testThreshold=0):
+def interpretSeparation(extractedSpikes, critic, vallabel, method="energy", test=False, testThreshold=0, doPrint=False):
     if method == "energy":
-        energy = torch.sum(torch.square(extractedSpikes), 0)
+        energy = torch.sum(torch.square(extractedSpikes), axis=1)
 
         thresholds =  [x / 20 for x in range(1,600,1)]
         toTest = energy
@@ -44,11 +46,11 @@ def interpretSeparation(extractedSpikes, critic, vallabel, method="energy", test
         thresholds =  [x / 2 for x in range(-200,0,1)]
         toTest = criticScores
 
+    if test:
+        hist, edges = np.histogram(toTest, bins = 100)
 
-    hist, edges = np.histogram(toTest, bins = 100)
-
-    plt.bar(edges[:-1], hist, width=np.diff(edges), edgecolor="black", align="edge")
-    plt.show()
+        plt.bar(edges[:-1], hist, width=np.diff(edges), edgecolor="black", align="edge")
+        plt.show()
 
     used = []
     sensitivities = []
@@ -60,26 +62,27 @@ def interpretSeparation(extractedSpikes, critic, vallabel, method="energy", test
         try:
             res = torch.where(toTest > threshold, 1, 0).numpy().astype("int64")
 
-            confusionMatrix = confusionMatrix(vallabel, res)
+            cm = confusionMatrix(vallabel, res)
 
-            accuracy, sensitivity, specificity, f1 = metrics(confusionMatrix)
+            accuracy, sensitivity, specificity, f1 = metrics(cm)
 
             sensitivities.append(sensitivity)
             accuracies.append(accuracy)
             specificities.append(specificity)
             used.append(threshold)
-            f1s.append[f1]
+            f1s.append(f1)
         except:
             continue
         
-    _, axs = plt.subplots(1,3)
-    axs[0].plot(accuracies)
-    axs[0].title.set_text("Accuracy")
-    axs[1].plot(specificities)
-    axs[1].title.set_text("Specificity")
-    axs[2].plot(sensitivities)
-    axs[2].title.set_text("Sensitivity")
-    plt.show()
+    if doPrint:
+        _, axs = plt.subplots(1,3)
+        axs[0].plot(accuracies)
+        axs[0].title.set_text("Accuracy")
+        axs[1].plot(specificities)
+        axs[1].title.set_text("Specificity")
+        axs[2].plot(sensitivities)
+        axs[2].title.set_text("Sensitivity")
+        plt.show()
 
     threshold = used[f1s.index(max(f1s))]
     print("Threshold for best F1: {}".format(threshold))
@@ -93,13 +96,13 @@ def interpretSeparation(extractedSpikes, critic, vallabel, method="energy", test
 
     res = torch.where(energy > threshold, 1, 0).numpy().astype("int64")
 
-    confusionMatrix = confusionMatrix(vallabel, res)
+    cm = confusionMatrix(vallabel, res)
 
-    accuracy, sensitivity, specificity, f1 = metrics(confusionMatrix)
+    accuracy, sensitivity, specificity, f1 = metrics(cm)
 
     print("Sensitivity: {}".format(sensitivity))
     print("Specificity: {}".format(specificity))
     print("Accuracy: {}".format(accuracy))
     
 
-    return (threshold, confusionMatrix, accuracy, sensitivity, specificity)
+    return (threshold, cm, accuracy, sensitivity, specificity, f1)
