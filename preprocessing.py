@@ -213,9 +213,9 @@ def gen_loaders(batchsize, includedSimulations, trainRatio=0.8, valRatio=0.1, do
     
     return (trainSpikesLoader, valSpikesLoader, testSpikesLoader, trainBgLoader, valBgLoader, testBgLoader)
 
-def it_genLoaders(batchsize, includedSimulations, trainRatio=0.8, valRatio=0.1, snr=10, inclusionThreshold=0.4, doPrint=False, iterations=5, snrs=[1,2,3,4,5,6], baseDatasetPath="../data/datasets"):
+def it_genLoaders(batchsize, includedSimulations, trainRatio=0.8, valRatio=0.1, snr=10, inclusionThreshold=0.4, doPrint=False, iterations=[1,2,3,4,5], snrs=[1,2,3,4,5,6], baseDatasetPath="../data/datasets"):
 
-    for iteration in range(1, iterations + 1):
+    for iteration in iterations:
         print(f"Generating dataset for iteration {iteration}\nProcessing Simulation: ", end="")
 
         trainSpikes = np.empty_like(np.ones(80).reshape(1,80))

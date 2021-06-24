@@ -232,7 +232,7 @@ def trainingProcess(baseDatasetPath, iteration, baseModelPath, batchSize, noiseD
 
 
 def spawnTrainingProcesses(baseDatasetPath, iteration, baseModelPath, batchSize, noiseDim, epochs):
-    mp.set_start_method('spawn')
+    #mp.set_start_method('spawn')
     
     p1 = Process(target=trainingProcess, args=(baseDatasetPath, iteration, baseModelPath, batchSize, noiseDim, epochs, "spike"))
     p2 = Process(target=trainingProcess, args=(baseDatasetPath, iteration, baseModelPath, batchSize, noiseDim, epochs, "noise"))
