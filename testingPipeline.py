@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import matplotlib.pyplot as plt
-
+from array import array
 import gans
 
 def confusionMatrix(labels, predictions):
@@ -43,10 +43,10 @@ def interpretSeparation(extractedSpikes, critic, vallabel, method="energy", test
         criticScores = critic.forward(extractedSpikes.to(gans.device)).cpu().detach().numpy()
         criticScores = [x for [x] in criticScores]
 
-        thresholds =  [x / 2 for x in range(-200,0,1)]
+        thresholds =  [x / 2 for x in range(-300,100,1)]
         toTest = criticScores
 
-    if test:
+    if test or not test:
         hist, edges = np.histogram(toTest, bins = 100)
 
         plt.bar(edges[:-1], hist, width=np.diff(edges), edgecolor="black", align="edge")
@@ -83,7 +83,8 @@ def interpretSeparation(extractedSpikes, critic, vallabel, method="energy", test
         axs[2].plot(sensitivities)
         axs[2].title.set_text("Sensitivity")
         plt.show()
-
+    plt.plot(used)
+    plt.show()
     threshold = used[f1s.index(max(f1s))]
     print("Threshold for best F1: {}".format(threshold))
     
@@ -105,4 +106,38 @@ def interpretSeparation(extractedSpikes, critic, vallabel, method="energy", test
     print("Accuracy: {}".format(accuracy))
     
 
-    return (threshold, cm, accuracy, sensitivity, specificity, f1)
+    return (threshold, cm, accuracy, sensitivity, specificity, f1, res)
+
+def epdFormat(data, floatPath, timestampPath, labelPath):
+    flat = data.flatten()
+    print(f"Number of windows: {len(data)}")
+    print(f"Number of windows times 78: {len(data) * 78}")
+    print(f"Number of samples: {len(flat)}")
+    print("First 10 python samples:")
+    print(flat[:10])
+    print("First 10 32 bit samples:")
+    output_file = open(floatPath, 'wb')
+    float_array = array('f', flat)
+    print(float_array[:10])
+    float_array.tofile(output_file)
+    output_file.close()
+
+    timestamps = []
+    for i, window in enumerate(data):
+        (maxIndex,) = np.where(window == max(window))
+        timestamps.append(i * 78 + maxIndex[0])
+    timestamps = np.array(timestamps)
+    print(f"Number of timestamps: {len(timestamps)}")
+
+    output_file = open(timestampPath, 'wb')
+    timestamp_array = array('i', timestamps)
+    timestamp_array.tofile(output_file)
+    output_file.close()
+
+    labels = np.ones_like(timestamps)
+    print(labels)
+    print(f"Number of labels: {len(labels)}")
+    output_file = open(labelPath, 'wb')
+    label_array = array('i', labels)
+    label_array.tofile(output_file)
+    output_file.close()

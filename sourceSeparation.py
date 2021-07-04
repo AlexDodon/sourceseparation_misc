@@ -10,18 +10,20 @@ plt.rcParams['figure.figsize'] = [16, 8]
 
 def maxlikelihood_separatesources(
     generators,
+    discriminators,
     loader_mix, 
     epochs=5,
     doPrint=False
 ):
     generator1, generator2 = generators
+    discriminator1, discriminator2 = discriminators
     inputSize = generator1.inputSize
 
     mixes = []
     extractedSpikes = []
     extractedNoises = []
     generatedMixes = []
-
+    tError = 0
     for i, [mix] in enumerate(loader_mix):
         if i > 0:
             #we process all windows in parallel
@@ -35,19 +37,17 @@ def maxlikelihood_separatesources(
 
         optimizer_sourcesep = optim.Adam([x1, x2], lr=1e-3, betas=(0.5, 0.999))
         for epoch in range(epochs):
-           
-            mix_sum = generator1.forward(x1) + generator2.forward(x2) 
-            # #Poisson
-            #eps = 1e-20
-            #err = torch.mean(-mix*torch.log(mix_sum+eps) + mix_sum)
-
-            # Euclidean
+            source1 = generator1.forward(x1)
+            source2 = generator2.forward(x2)
+            mix_sum = source1 +  source2
+            serr = torch.mean(torch.abs(source1[1:] - source1[:-1]) \
+                              +torch.abs(source2[1:] - source2[:-1]))
             err = torch.mean((mix - mix_sum) ** 2)
 
+            tError += err.cpu().detach().numpy()
+            
             err.backward()
-
             optimizer_sourcesep.step()
-
             x1.grad.data.zero_()
             x2.grad.data.zero_()
         
@@ -73,20 +73,21 @@ def maxlikelihood_separatesources(
         mixes = torch.stack(mixes)
         mixes = torch.fft.irfft(mixes).cpu().detach()
         
-        fig, axs = plt.subplots(4,3)
+        plt.rcParams['figure.figsize'] = [16, 4]
+        fig, axs = plt.subplots(1,3)
         plt.setp(axs, ylim=(-0.4,1))
         fig.tight_layout()
         
-        axs[0][0].title.set_text('Estimated Source 1')
-        axs[0][1].title.set_text('Estimated Source 2')
-        axs[0][2].title.set_text('Mixture (Blue) vs Sum of estimated sources')
+        axs[0].title.set_text('Estimated Source 1')
+        axs[1].title.set_text('Estimated Source 2')
+        axs[2].title.set_text('Mixture (Blue) vs Sum of estimated sources')
 
-        for i,j in enumerate([0,7,2,23]):
-            axs[i][0].plot(extractedSpikes[j])
-            axs[i][1].plot(extractedNoises[j])
-            axs[i][2].plot(mixes[j])
-            axs[i][2].plot(generatedMixes[j])
+        for i,j in enumerate([0]):
+            axs[0].plot(extractedSpikes[j])
+            axs[1].plot(extractedNoises[j])
+            axs[2].plot(mixes[j])
+            axs[2].plot(generatedMixes[j])
 
         plt.show()
     
-    return (extractedSpikes, extractedNoises)
+    return (extractedSpikes, extractedNoises, tError / nmix)

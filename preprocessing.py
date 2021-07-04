@@ -66,7 +66,9 @@ def splitSim(simNo, trainRatio, valRatio, inclusionThreshold=0.4):
                 # right now were taking them into consideration
                 #if spikeClasses[spikeIndex] != 0: # It isn't a multi unit spike
                 if max(data[simIndex : simIndex + spikeLength]) >= inclusionThreshold:
-                    spikes.append(data[simIndex : simIndex + spikeLength])
+                    spikes.append(
+                        data[simIndex : simIndex + spikeLength]
+                        )
                 
                 simIndex += spikeLength
                 spikeIndex += 1
