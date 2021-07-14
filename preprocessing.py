@@ -33,7 +33,7 @@ def checkSpikeLocations():
 
     plt.show()
 
-def splitSim(simNo, trainRatio, valRatio, inclusionThreshold=0.4):
+def splitSim(simNo, trainRatio, valRatio, inclusionThreshold=0.4, demo=False):
     gt = scipy.io.loadmat('../data/gen/ground_truth.mat')
     sim = scipy.io.loadmat('../data/gen/simulation_{}.mat'.format(simNo))
 
@@ -98,6 +98,10 @@ def splitSim(simNo, trainRatio, valRatio, inclusionThreshold=0.4):
 
     rng = np.random.default_rng()
 
+    if demo:
+        spikes = spikes[0:40]
+        background = background[0:40]
+
     spikes = torch.Tensor(spikes).to(device)
     spikes = torch.fft.rfft(spikes, dim=1)
     spikes = torch.cat((torch.real(spikes), torch.imag(spikes)), axis=1)
@@ -152,7 +156,7 @@ def drownSpikes(snr, inSpikes,  inDown, doPrint):
         plt.setp(axs, ylim=(-0.4,1.5))
         fig.suptitle(f"For snr {snr}", fontsize=14)
         fig.tight_layout()
-        for i,(a,b) in enumerate(zip(printSpikes[:4], outSpikes[:4])):  
+        for i,(a,b) in enumerate(zip(printSpikes[0:4], outSpikes[0:4])):  
             axs[i//2][i%2].plot(torch.fft.irfft(torch.from_numpy(a)[0:40] + 1j * torch.from_numpy(a)[40:]).cpu().detach().numpy(), label="Original Spike")
             axs[i//2][i%2].plot(torch.fft.irfft(torch.from_numpy(b)[0:40] + 1j * torch.from_numpy(b)[40:]).cpu().detach().numpy(), label="Drowned Spike")
 
@@ -165,7 +169,7 @@ def drownSpikes(snr, inSpikes,  inDown, doPrint):
 
     return np.array(outSpikes)
 
-def gen_loaders(batchsize, includedSimulations, trainRatio=0.8, valRatio=0.1, doDrown=False, snr=10, inclusionThreshold=0.4, doPrint=False):
+def gen_loaders(batchsize, includedSimulations, trainRatio=0.8, valRatio=0.1, doDrown=False, snr=10, inclusionThreshold=0.4, doPrint=False, demo=False):
     trainSpikes = np.empty_like(np.ones(80).reshape(1,80))
     valSpikes = np.empty_like(np.ones(80).reshape(1,80))
     testSpikes = np.empty_like(np.ones(80).reshape(1,80))
@@ -178,7 +182,7 @@ def gen_loaders(batchsize, includedSimulations, trainRatio=0.8, valRatio=0.1, do
 
     for i in range(1,includedSimulations + 1):
         print(f"{i},", end=" ")
-        trs, vs,ts, trb, vb, tb, trd, vd, td = splitSim(i, trainRatio, valRatio, inclusionThreshold)
+        trs, vs,ts, trb, vb, tb, trd, vd, td = splitSim(i, trainRatio, valRatio, inclusionThreshold, demo)
         trainSpikes = np.concatenate((trainSpikes,trs),axis=0)
         valSpikes = np.concatenate((valSpikes,vs),axis=0)
         testSpikes = np.concatenate((testSpikes,ts),axis=0)
@@ -215,7 +219,7 @@ def gen_loaders(batchsize, includedSimulations, trainRatio=0.8, valRatio=0.1, do
     
     return (trainSpikesLoader, valSpikesLoader, testSpikesLoader, trainBgLoader, valBgLoader, testBgLoader)
 
-def it_genLoaders(batchsize, includedSimulations, trainRatio=0.8, valRatio=0.1, snr=10, inclusionThreshold=0.4, doPrint=False, iterations=[1,2,3,4,5], snrs=[1,2,3,4,5,6], baseDatasetPath="../data/datasets"):
+def it_genLoaders(batchsize, includedSimulations, trainRatio=0.8, valRatio=0.1, snr=10, inclusionThreshold=0.4, doPrint=False, iterations=[1,2,3,4,5], snrs=[1,2,3,4,5,6], baseDatasetPath="../data/datasets", demo=False):
 
     for iteration in iterations:
         print(f"Generating dataset for iteration {iteration}\nProcessing Simulation: ", end="")
@@ -232,7 +236,7 @@ def it_genLoaders(batchsize, includedSimulations, trainRatio=0.8, valRatio=0.1, 
 
         for i in range(1,includedSimulations + 1):
             print(f"{i},", end=" ")
-            trs, vs,ts, trb, vb, tb, trd, vd, td = splitSim(i, trainRatio, valRatio, inclusionThreshold)
+            trs, vs,ts, trb, vb, tb, trd, vd, td = splitSim(i, trainRatio, valRatio, inclusionThreshold, demo)
             trainSpikes = np.concatenate((trainSpikes,trs),axis=0)
             valSpikes = np.concatenate((valSpikes,vs),axis=0)
             testSpikes = np.concatenate((testSpikes,ts),axis=0)
@@ -247,6 +251,9 @@ def it_genLoaders(batchsize, includedSimulations, trainRatio=0.8, valRatio=0.1, 
 
         valSize = len(valSpikes)
         testSize = len(testSpikes)
+        print(len(trainSpikes))
+        print(valSize)
+        print(testSize)
 
         print("Generating non-drowned segment of dataset")
 

@@ -42,7 +42,7 @@ def maxlikelihood_separatesources(
             mix_sum = source1 +  source2
             serr = torch.mean(torch.abs(source1[1:] - source1[:-1]) \
                               +torch.abs(source2[1:] - source2[:-1]))
-            err = torch.mean((mix - mix_sum) ** 2)
+            err = torch.mean((mix - mix_sum) ** 2) + 0.01*serr
 
             tError += err.cpu().detach().numpy()
             
@@ -72,22 +72,22 @@ def maxlikelihood_separatesources(
         mixes = [extractedNoise[0:40] + 1j * extractedNoise[40:] for extractedNoise in mixes]
         mixes = torch.stack(mixes)
         mixes = torch.fft.irfft(mixes).cpu().detach()
-        
         plt.rcParams['figure.figsize'] = [16, 4]
-        fig, axs = plt.subplots(1,3)
-        plt.setp(axs, ylim=(-0.4,1))
-        fig.tight_layout()
-        
-        axs[0].title.set_text('Estimated Source 1')
-        axs[1].title.set_text('Estimated Source 2')
-        axs[2].title.set_text('Mixture (Blue) vs Sum of estimated sources')
+        for i,j in enumerate([0,1]):
+            fig, axs = plt.subplots(1,3)
+            plt.setp(axs, ylim=(-0.4,1))
+            fig.tight_layout()
+            
+            axs[0].title.set_text('Estimated Source 1')
+            axs[1].title.set_text('Estimated Source 2')
+            axs[2].title.set_text('Mixture (Blue) vs Sum of estimated sources')
 
-        for i,j in enumerate([0]):
             axs[0].plot(extractedSpikes[j])
             axs[1].plot(extractedNoises[j])
             axs[2].plot(mixes[j])
             axs[2].plot(generatedMixes[j])
+            plt.show()
 
-        plt.show()
+        
     
     return (extractedSpikes, extractedNoises, tError / nmix)

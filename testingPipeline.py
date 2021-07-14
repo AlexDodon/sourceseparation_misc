@@ -30,7 +30,7 @@ def metrics(confusionMatrix):
 
     return (accuracy, sensitivity, specificity, f1)
 
-def interpretSeparation(extractedSpikes, critic, vallabel, method="energy", test=False, testThreshold=0, doPrint=False):
+def interpretSeparation(extractedSpikes, critic, vallabel, method="energy", test=False, testThreshold=0, doPrint=False,demo=False):
     if method == "energy":
         energy = torch.sum(torch.square(extractedSpikes), axis=1)
 
@@ -46,7 +46,7 @@ def interpretSeparation(extractedSpikes, critic, vallabel, method="energy", test
         thresholds =  [x / 2 for x in range(-300,100,1)]
         toTest = criticScores
 
-    if test or not test:
+    if not demo:
         hist, edges = np.histogram(toTest, bins = 100)
 
         plt.bar(edges[:-1], hist, width=np.diff(edges), edgecolor="black", align="edge")
@@ -74,19 +74,18 @@ def interpretSeparation(extractedSpikes, critic, vallabel, method="energy", test
         except:
             continue
         
-    if doPrint:
+    if doPrint and not test:
         _, axs = plt.subplots(1,3)
-        axs[0].plot(accuracies)
+        axs[0].plot(used,accuracies)
         axs[0].title.set_text("Accuracy")
-        axs[1].plot(specificities)
+        axs[1].plot(used,specificities)
         axs[1].title.set_text("Specificity")
-        axs[2].plot(sensitivities)
+        axs[2].plot(used,sensitivities)
         axs[2].title.set_text("Sensitivity")
         plt.show()
-    plt.plot(used)
-    plt.show()
     threshold = used[f1s.index(max(f1s))]
-    print("Threshold for best F1: {}".format(threshold))
+    if not test:
+        print("Threshold for best F1: {}".format(threshold))
     
     res = []
 
